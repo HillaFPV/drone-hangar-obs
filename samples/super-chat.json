@@ -1,0 +1,20 @@
+{
+    "type": "superChat",
+    "id": "ChwKGkNMcnAwUHJWLUlvREZXek1sQWtkdEVVcWNB",
+    "datetime": "2025-01-15 16:29:28",
+    "author": {
+        "name": "Daddy Warbucks FPV",
+        "imageUrl": "https://yt4.ggpht.com/Bhz7fvUv67q0Az6Bnqc58hWbfly18TIMYhi3rFp8P08u7jsTgMqrmgkN_6ZHXkk9vFvdU7s-bQ=s64-c-k-c0x00ffffff-no-rj",
+        "isVerified": false,
+        "isChatOwner": false,
+        "isChatSponsor": false,
+        "isChatModerator": true
+    },
+    "amountValue": 50.00,
+    "amountString": "$50.00",
+    "currency": "",
+    "message": "What's up erryboddy",
+    "messageEx": [
+        "What's up erryboddy"
+    ]
+}
