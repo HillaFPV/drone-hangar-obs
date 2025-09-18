@@ -90,7 +90,7 @@ async def watch_chat():
                     }
                     try:
                         response = requests.post("http://127.0.0.1:8000/chat", json=request_data)
-                        print(request_data)
+
                         if 200 >= response.status_code >= 299:
                             print("Got an error sending chat data to FastAPI")
                             print(response.status_code, print(response.text))

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from pathlib import Path
 import time
 import rule_engine
 from obswebsocket import obsws, requests
@@ -16,7 +17,8 @@ from models.chat_models import ChatMessage, BatteryMessage, TextMessage
 # All the OBSWS protocol stuff you need is here:
 # https://github.com/obsproject/obs-websocket/blob/master/docs/generated/protocol.md
 
-logging.basicConfig(filename="../logs/chat-processor.log",
+Path("./logs").mkdir(parents=True, exist_ok=True)
+logging.basicConfig(filename="./logs/chat-processor.log",
                     filemode='a',
                     format='%(message)s',
                     level=logging.INFO)
@@ -39,7 +41,8 @@ class ChatProcessor:
                          "Allen Applewhite (Creeper FPV)": 0,
                          "That Guy Phly": 0,
                          "WallBanger": 0,
-                         "RidiFPV": 0
+                         "RidiFPV": 0,
+                         "Kevin Sumner": 0,
                          }
         self.chat_total_count = 0
         self.chat_pole_fill_amount = 0
@@ -50,7 +53,8 @@ class ChatProcessor:
                          "Allen Applewhite (Creeper FPV)": 0,
                          "That Guy Phly": 0,
                          "WallBanger": 0,
-                         "RidiFPV": 0
+                         "RidiFPV": 0,
+                         "Kevin Sumner": 0,
                          }
         self.chat_total_count = 0
         self.chat_pole_fill_amount = 0
@@ -122,7 +126,7 @@ class ChatProcessor:
             self.chat_pole_fill_amount = 0
             send_websocket_message("chat overflow")
 
-        change_source_text("Chat-Thermometer-Text", self.chat_total_count, colors['yellow'], colors['orange'])
+        change_source_text("Chat-Thermometer-Text", self.chat_total_count, colors['yellow'], colors['orange']) # TODO: What does this actually do?
 
         context = rule_engine.Context(type_resolver=rule_engine.type_resolver_from_dict({
             'author': {
@@ -138,7 +142,7 @@ class ChatProcessor:
             'amountValue': rule_engine.DataType.FLOAT
         }))
 
-        flat_message = chat_message.model_dump()
+        flat_message = chat_message.model_dump() # TODO: Why do we flatten the chat message?
         logger.info(json.dumps(flat_message))
 
         # Chat Message Rules
@@ -160,10 +164,6 @@ class ChatProcessor:
         big_superchat_rule = rule_engine.Rule("""
             (type == "superChat" and amountValue > 10.00) or
             (author.name == "HillaFPV" and "!!bigsuperchat" in message)
-            """, context=context)
-
-        squirrel_mother_rule = rule_engine.Rule("""
-            author.name == "Juliana Anderson"
             """, context=context)
 
         # New Chatter Announcement
@@ -188,7 +188,7 @@ class ChatProcessor:
                 sceneName="-------->SUPER CHAT Sv Ver."
             ))
 
-            await asyncio.sleep(18)
+            await asyncio.sleep(18) #TODO : We're queueing on this, don't
 
             ws.call(requests.SetCurrentProgramScene(
                 sceneName=launchpoint_scene_name
