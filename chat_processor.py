@@ -1,4 +1,5 @@
 import asyncio
+import time
 import json
 import logging
 from pathlib import Path
@@ -46,7 +47,47 @@ class ChatProcessor:
                          }
         self.chat_total_count = 0
         self.chat_pole_fill_amount = 0
+        self.floodgates_open = False
+        self.start_time = time.time()
 
+        self.context = rule_engine.Context(type_resolver=rule_engine.type_resolver_from_dict({
+            'author': {
+                'name': rule_engine.DataType.STRING,
+                'imageUrl': rule_engine.DataType.STRING,
+                'isVerified': rule_engine.DataType.BOOLEAN,
+                'isChatOwner': rule_engine.DataType.BOOLEAN,
+                'isChatSponsor': rule_engine.DataType.BOOLEAN,
+                'isChatModerator': rule_engine.DataType.BOOLEAN
+            },
+            'type': rule_engine.DataType.STRING,
+            'message': rule_engine.DataType.STRING,
+            'amountValue': rule_engine.DataType.FLOAT
+        }))
+
+        # Chat Message Rules
+        self.dank_dunk_tank_rule = rule_engine.Rule("""
+            (author.name == "Dank Cloudz FPV" and "balls" in message.as_lower) or
+            (author.name == "HillaFPV" and "Wake up, dank!" in message)
+            """, context=self.context)
+
+        self.superchat_rule = rule_engine.Rule("""
+            (type == "superChat" and amountValue < 4.20) or
+            (author.name == "HillaFPV" and "!!superchat" in message)
+            """, context=self.context)
+
+        self.dab_superchat_rule = rule_engine.Rule("""
+            (type == "superChat" and amountValue >= 4.20 and amountValue < 10.00 ) or
+            (author.name == "HillaFPV" and "!!dabsuperchat" in message)
+            """, context=self.context)
+
+        self.big_superchat_rule = rule_engine.Rule("""
+            (type == "superChat" and amountValue > 10.00) or
+            (author.name == "HillaFPV" and "!!bigsuperchat" in message)
+            """, context=self.context)
+
+    def start(self):
+        self.floodgates_open = True
+    
     def reset(self):
         self.chatters = {"HillaFPV": 0,
                          "Dank Cloudz FPV": 0,
@@ -58,11 +99,9 @@ class ChatProcessor:
                          }
         self.chat_total_count = 0
         self.chat_pole_fill_amount = 0
-
-    def reset_pole(self):
-        self.chat_pole_fill_amount = 0
+        self.floodgates_open = False
         update_thermometer(self.chat_pole_fill_amount)
-
+        
     def set_battery(self, battery_message: BatteryMessage):
         volts_string = str(int(battery_message.volts * 100))
         battery_percentage = int(volts_string) - 320
@@ -84,7 +123,6 @@ class ChatProcessor:
         else:
             battery_chunk = 1
 
-        print(battery_percentage, battery_chunk)
         ws.call(requests.SetInputSettings(inputName=f"OSD-Battery-Icon", inputSettings={
             "file": f"{font_path}/Battery-{battery_chunk}.png"
         }))
@@ -92,7 +130,6 @@ class ChatProcessor:
             ws.call(requests.SetInputSettings(inputName=f"OSD-Volts-{i+1}", inputSettings={
                 "file": f"{font_path}/{char}.png"
             }))
-
 
     def set_text(self, text_message: TextMessage):
         for i, char in enumerate(text_message.text.center(20)):
@@ -118,139 +155,105 @@ class ChatProcessor:
 
 
     async def process_chat(self, chat_message: ChatMessage):
-        self.chat_total_count += 1
-        self.chat_pole_fill_amount += 1
-        if self.chat_pole_fill_amount <= THERMOMETER_STEPS:
-            update_thermometer(self.chat_pole_fill_amount)
-        else:
-            self.chat_pole_fill_amount = 0
-            send_websocket_message("chat overflow")
+        if self.floodgates_open:
+            self.chat_total_count += 1
+            self.chat_pole_fill_amount += 1
+            if self.chat_pole_fill_amount <= THERMOMETER_STEPS:
+                update_thermometer(self.chat_pole_fill_amount)
+            else:
+                self.chat_pole_fill_amount = 0
+                send_websocket_message("chat overflow")
 
-        change_source_text("Chat-Thermometer-Text", self.chat_total_count, colors['yellow'], colors['orange']) # TODO: What does this actually do?
+            change_source_text("Chat-Thermometer-Text", self.chat_total_count, colors['yellow'], colors['orange'])
 
-        context = rule_engine.Context(type_resolver=rule_engine.type_resolver_from_dict({
-            'author': {
-                'name': rule_engine.DataType.STRING,
-                'imageUrl': rule_engine.DataType.STRING,
-                'isVerified': rule_engine.DataType.BOOLEAN,
-                'isChatOwner': rule_engine.DataType.BOOLEAN,
-                'isChatSponsor': rule_engine.DataType.BOOLEAN,
-                'isChatModerator': rule_engine.DataType.BOOLEAN
-            },
-            'type': rule_engine.DataType.STRING,
-            'message': rule_engine.DataType.STRING,
-            'amountValue': rule_engine.DataType.FLOAT
-        }))
+            flat_message = chat_message.model_dump() # TODO: Why do we flatten the chat message?
+            logger.info(json.dumps(flat_message))
 
-        flat_message = chat_message.model_dump() # TODO: Why do we flatten the chat message?
-        logger.info(json.dumps(flat_message))
+            # New Chatter Announcement
+            if chat_message.author.name not in self.chatters:
+                self.chatters.update({chat_message.author.name: 0})
 
-        # Chat Message Rules
-        dank_dunk_tank_rule = rule_engine.Rule("""
-            (author.name == "Dank Cloudz FPV" and "balls" in message.as_lower) or
-            (author.name == "HillaFPV" and "Wake up, dank!" in message)
-            """, context=context)
+                # Change the text on the "Chat Enter Name" on the Tet GDI+ source
+                change_source_text("Chat Enter Name",
+                                f"        {chat_message.author.name}    has    joined!")
 
-        superchat_rule = rule_engine.Rule("""
-            (type == "superChat" and amountValue < 4.20) or
-            (author.name == "HillaFPV" and "!!superchat" in message)
-            """, context=context)
+                send_websocket_message("first time chatter")
 
-        dab_superchat_rule = rule_engine.Rule("""
-            (type == "superChat" and amountValue >= 4.20 and amountValue < 10.00 ) or
-            (author.name == "HillaFPV" and "!!dabsuperchat" in message)
-            """, context=context)
+            self.chatters.update({chat_message.author.name: self.chatters[chat_message.author.name] + 1})
 
-        big_superchat_rule = rule_engine.Rule("""
-            (type == "superChat" and amountValue > 10.00) or
-            (author.name == "HillaFPV" and "!!bigsuperchat" in message)
-            """, context=context)
+            # Put rules evaluations here:
+            if self.superchat_rule.matches(flat_message):
+                change_source_text("Super Chat Scrolling Text",
+                                f" " * 40 + f"{chat_message.amountString}      SUPER CHAT FROM {chat_message.author.name}!!!" + " " * 30)
+                launchpoint_scene_name = ws.call(requests.GetCurrentProgramScene()).getSceneName()
 
-        # New Chatter Announcement
-        if chat_message.author.name not in self.chatters:
-            self.chatters.update({chat_message.author.name: 0})
+                ws.call(requests.SetCurrentProgramScene(
+                    sceneName="-------->SUPER CHAT Sv Ver."
+                ))
 
-            # Change the text on the "Chat Enter Name" on the Tet GDI+ source
-            change_source_text("Chat Enter Name",
-                               f"        {chat_message.author.name}    has    joined!")
+                await asyncio.sleep(18) #TODO : We're queueing on this, don't
 
-            send_websocket_message("first time chatter")
+                ws.call(requests.SetCurrentProgramScene(
+                    sceneName=launchpoint_scene_name
+                ))
 
-        self.chatters.update({chat_message.author.name: self.chatters[chat_message.author.name] + 1})
+            if self.dab_superchat_rule.matches(flat_message):
+                change_source_text("Super Chat Scrolling Text",
+                                f" " * 40 + f"{chat_message.amountString}      SUPER CHAT FROM {chat_message.author.name}!!!" + " " * 30)
 
-        # Put rules evaluations here:
-        if superchat_rule.matches(flat_message):
-            change_source_text("Super Chat Scrolling Text",
-                               f" " * 40 + f"{chat_message.amountString}      SUPER CHAT FROM {chat_message.author.name}!!!" + " " * 30)
-            launchpoint_scene_name = ws.call(requests.GetCurrentProgramScene()).getSceneName()
+                launchpoint_scene_name = ws.call(requests.GetCurrentProgramScene()).getSceneName()
 
-            ws.call(requests.SetCurrentProgramScene(
-                sceneName="-------->SUPER CHAT Sv Ver."
-            ))
+                ws.call(requests.SetCurrentProgramScene(
+                    sceneName="-------->SUPER CHAT Sv Ver."
+                ))
 
-            await asyncio.sleep(18) #TODO : We're queueing on this, don't
+                await asyncio.sleep(18)
 
-            ws.call(requests.SetCurrentProgramScene(
-                sceneName=launchpoint_scene_name
-            ))
+                ws.call(requests.SetCurrentProgramScene(
+                    sceneName="---->DH Lougne 2025"
+                ))
 
-        if dab_superchat_rule.matches(flat_message):
-            change_source_text("Super Chat Scrolling Text",
-                               f" " * 40 + f"{chat_message.amountString}      SUPER CHAT FROM {chat_message.author.name}!!!" + " " * 30)
+                await asyncio.sleep(4)
 
-            launchpoint_scene_name = ws.call(requests.GetCurrentProgramScene()).getSceneName()
+                send_websocket_message("shelby glide 3")
 
-            ws.call(requests.SetCurrentProgramScene(
-                sceneName="-------->SUPER CHAT Sv Ver."
-            ))
+                await asyncio.sleep(12)
 
-            await asyncio.sleep(18)
+                ws.call(requests.SetCurrentProgramScene(
+                    sceneName=launchpoint_scene_name
+                ))
 
-            ws.call(requests.SetCurrentProgramScene(
-                sceneName="---->DH Lougne 2025"
-            ))
+            if self.big_superchat_rule.matches(flat_message):
+                change_source_text("Super Chat Scrolling Text",
+                                f" " * 40 + f"{chat_message.amountString}      SUPER CHAT FROM {chat_message.author.name}!!!" + " " * 30)
 
-            await asyncio.sleep(4)
+                launchpoint_scene_name = ws.call(requests.GetCurrentProgramScene()).getSceneName()
 
-            send_websocket_message("shelby glide 3")
+                ws.call(requests.SetCurrentProgramScene(
+                    sceneName="-------->SUPER CHAT Sv Ver."
+                ))
 
-            await asyncio.sleep(12)
+                await asyncio.sleep(18)
 
-            ws.call(requests.SetCurrentProgramScene(
-                sceneName=launchpoint_scene_name
-            ))
+                ws.call(requests.SetCurrentProgramScene(
+                    sceneName="---->DH Lougne 2025"
+                ))
 
-        if big_superchat_rule.matches(flat_message):
-            change_source_text("Super Chat Scrolling Text",
-                               f" " * 40 + f"{chat_message.amountString}      SUPER CHAT FROM {chat_message.author.name}!!!" + " " * 30)
+                await asyncio.sleep(1)
+                send_websocket_message("shelby glide 1")
+                await asyncio.sleep(3)
+                send_websocket_message("shelby glide 2")
+                await asyncio.sleep(20)
+                send_websocket_message("shelby glide 3")
 
-            launchpoint_scene_name = ws.call(requests.GetCurrentProgramScene()).getSceneName()
+                await asyncio.sleep(20)
 
-            ws.call(requests.SetCurrentProgramScene(
-                sceneName="-------->SUPER CHAT Sv Ver."
-            ))
+                ws.call(requests.SetCurrentProgramScene(
+                    sceneName=launchpoint_scene_name
+                ))
 
-            await asyncio.sleep(18)
-
-            ws.call(requests.SetCurrentProgramScene(
-                sceneName="---->DH Lougne 2025"
-            ))
-
-            await asyncio.sleep(1)
-            send_websocket_message("shelby glide 1")
-            await asyncio.sleep(3)
-            send_websocket_message("shelby glide 2")
-            await asyncio.sleep(20)
-            send_websocket_message("shelby glide 3")
-
-            await asyncio.sleep(20)
-
-            ws.call(requests.SetCurrentProgramScene(
-                sceneName=launchpoint_scene_name
-            ))
-
-        if dank_dunk_tank_rule.matches(flat_message):
-            send_websocket_message("dank dunk tank")
+            if self.dank_dunk_tank_rule.matches(flat_message):
+                send_websocket_message("dank dunk tank")
 
 
 while True:

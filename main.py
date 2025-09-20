@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import json
+import time
 from fastapi import BackgroundTasks, FastAPI, WebSocket, status, Body, HTTPException, Response, Request, APIRouter, Depends
 from pathlib import Path
 from chat_processor import ChatProcessor
@@ -55,17 +56,31 @@ async def get_chatters_endpoint():
         'chat_pole_fill_amount': chat_processor.chat_pole_fill_amount},
         indent=2))
 
+@app.get("/start")
+async def start_endpoint(background_tasks: BackgroundTasks):
+    async def task():
+        chat_processor.start_time = time.time()
+        while True:
+            seconds = int(time.time() - chat_processor.start_time)
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            remaining_seconds = seconds % 60
+            payload = TextMessage(text="{:02d}:{:02d}:{:02d}".format(hours, minutes, remaining_seconds))
+            chat_processor.set_clock(payload)
+
+            battery_remaining = str(round(4.20 - (seconds / (1.5*60*60)), 2))
+            payload = BatteryMessage(volts=battery_remaining)
+            chat_processor.set_battery(payload)
+            await asyncio.sleep(1)
+
+    chat_processor.start()
+    background_tasks.add_task(task)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
 @app.get("/reset")
 async def reset_endpoint(background_tasks: BackgroundTasks):
     async def task():
         chat_processor.reset()
-    background_tasks.add_task(task)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-@app.get("/reset-pole")
-async def reset_pole(background_tasks: BackgroundTasks):
-    async def task():
-        chat_processor.reset_pole()
     background_tasks.add_task(task)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

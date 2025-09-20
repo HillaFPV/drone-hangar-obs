@@ -20,45 +20,24 @@ print()
 print(f"streamID: {stream_id}")
 print()
 
-def OBS_is_up():
+def OBS1_is_up():
     try:
         response = requests.get("http://127.0.0.1:8000/health")
         if response.status_code != 200:
-            print("Got an error health checking FastAPI")
+            print("Got an error health checking OBS1")
             print(response.status_code, print(response.text))
             return False
         return True
     except requests.exceptions.ConnectionError as ce:
-        print("Can't reach FastAPI, is it running?")
+        print("Can't reach OBS1, is it running?")
         return False
-
-async def clock():
-    start_time = time.time()
-    while True:
-        while True:
-            if OBS_is_up():
-                break
-            else:
-                time.sleep(2)
-
-        seconds = int(time.time() - start_time)
-        hours = seconds // 3600
-        minutes = (seconds % 3600) // 60
-        remaining_seconds = seconds % 60
-        payload = {"text": "{:02d}:{:02d}:{:02d}".format(hours, minutes, remaining_seconds)}
-        requests.post("http://127.0.0.1:8000/clock", json=payload)
-
-        battery_remaining = str(round(4.20 - (seconds / (1.5*60*60)), 2))
-        requests.post("http://127.0.0.1:8000/battery", json={"volts": battery_remaining})
-        await asyncio.sleep(1)
-
 
 async def watch_chat():
     try:
         while True:
             print("Booting Up")
             while True:
-                if OBS_is_up():
+                if OBS1_is_up():
                     break
                 else:
                     time.sleep(2)
@@ -106,9 +85,9 @@ async def watch_chat():
         print("Restarting watcher...")
         time.sleep(1)
 
-async def multi_thread_this():
-    run_multiple_tasks_at_once = await asyncio.gather(clock(), watch_chat())
+async def background_tasks():
+    await asyncio.gather(watch_chat())
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
-loop.run_until_complete(multi_thread_this())
+loop.run_until_complete(background_tasks())
