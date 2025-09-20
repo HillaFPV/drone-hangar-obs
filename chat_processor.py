@@ -86,6 +86,7 @@ class ChatProcessor:
             """, context=self.context)
 
     def start(self):
+        self.reset()
         self.floodgates_open = True
     
     def reset(self):
@@ -100,6 +101,7 @@ class ChatProcessor:
         self.chat_total_count = 0
         self.chat_pole_fill_amount = 0
         self.floodgates_open = False
+        self.start_time = time.time()
         update_thermometer(self.chat_pole_fill_amount)
         
     def set_battery(self, battery_message: BatteryMessage):
