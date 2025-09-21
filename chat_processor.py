@@ -315,6 +315,7 @@ def source_restart_media(source):
 
 
 def send_websocket_message(message):
+    pre_send_timestamp = time.time()
     ws.call(requests.CallVendorRequest(
         vendorName="AdvancedSceneSwitcher",
         requestType="AdvancedSceneSwitcherMessage",
@@ -322,6 +323,8 @@ def send_websocket_message(message):
             "message": message
         }
     ))
+
+    logger.info(f"{time.time()}: send_websocket_message: \"{message}\" - took {time.time() - pre_send_timestamp}ms")
 
 
 def change_source_text(source, message, color=None, gradient_color=None):
