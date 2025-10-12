@@ -1,8 +1,9 @@
 fastapi[standard]==0.115.6
 flatdict==4.0.1
 obs-websocket-py==1.0
-rule-engine==4.5.0
 pydantic~=2.10.5
 pytchat==0.5.5
 requests==2.32.3
+rule-engine==4.5.0
 websockets==14.1
+yt-dlp==2025.9.26
